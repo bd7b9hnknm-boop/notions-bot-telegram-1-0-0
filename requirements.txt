@@ -6,6 +6,7 @@ google-genai>=1.0.0         # официальный SDK Google GenAI (фото 
 
 # --- ИИ (Qwen / Alibaba DashScope, OpenAI-совместимый) ---
 openai>=1.40.0              # используем для вызова Qwen по OpenAI-совместимому API
+av>=12.0.0                  # конвертация голосовых ogg/opus -> wav (ffmpeg в комплекте)
 
 # --- База данных ---
 aiosqlite>=0.20.0           # асинхронный SQLite

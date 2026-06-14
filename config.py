@@ -55,6 +55,7 @@ class Settings:
     qwen_api_keys: tuple[str, ...]     # ключи Qwen (DashScope)
     qwen_base_url: str
     qwen_model: str
+    qwen_asr_model: str                # модель распознавания речи
     gigachat_credentials: str
 
     # Общее
@@ -98,6 +99,7 @@ def load_settings() -> Settings:
             "QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
         ).strip(),
         qwen_model=os.getenv("QWEN_MODEL", "qwen-vl-max").strip(),
+        qwen_asr_model=os.getenv("QWEN_ASR_MODEL", "qwen3-asr-flash").strip(),
         gigachat_credentials=os.getenv("GIGACHAT_CREDENTIALS", "").strip(),
         timezone=os.getenv("TIMEZONE", "Europe/Moscow").strip(),
         database_path=os.getenv("DATABASE_PATH", "data/bot.db").strip(),
