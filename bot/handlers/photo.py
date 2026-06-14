@@ -24,6 +24,7 @@ async def handle_photo(message: Message, db: Database, ai: AIProvider) -> None:
         message.from_user.id, message.from_user.username, message.from_user.first_name
     )
 
+    await message.bot.send_chat_action(message.chat.id, "typing")
     status = await message.answer(personality.thinking("фото"))
 
     # самое крупное доступное превью
@@ -48,7 +49,12 @@ async def handle_photo(message: Message, db: Database, ai: AIProvider) -> None:
         return
 
     payload = payload_from_image(data)
+    payload["display"] = personality.format_analysis(data)
+    payload["saved"] = None
+    payload["reminded"] = None
     pid = pending.put(payload)
 
-    text = personality.format_analysis(data)
-    await status.edit_text(text, reply_markup=keyboards.after_analysis(pid))
+    await status.edit_text(
+        personality.render_card(payload),
+        reply_markup=keyboards.after_analysis(pid, payload),
+    )

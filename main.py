@@ -29,11 +29,13 @@ async def set_commands(bot: Bot) -> None:
     """Меню команд в Telegram (кнопка «/» в поле ввода)."""
     await bot.set_my_commands([
         BotCommand(command="start", description="Запуск и приветствие"),
+        BotCommand(command="today", description="Что на сегодня"),
         BotCommand(command="notes", description="Мои заметки"),
         BotCommand(command="find", description="Поиск по заметкам"),
         BotCommand(command="reminders", description="Мои напоминания"),
         BotCommand(command="sovet", description="Совет дня (PRO)"),
         BotCommand(command="stats", description="Аналитика (PRO)"),
+        BotCommand(command="menu", description="Меню"),
         BotCommand(command="upgrade", description="Тарифы"),
         BotCommand(command="help", description="Справка"),
     ])

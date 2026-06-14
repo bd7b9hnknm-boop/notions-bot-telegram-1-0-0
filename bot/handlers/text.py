@@ -22,5 +22,6 @@ async def handle_text(message: Message, db: Database, ai: AIProvider) -> None:
     await db.get_or_create_user(
         message.from_user.id, message.from_user.username, message.from_user.first_name
     )
+    await message.bot.send_chat_action(message.chat.id, "typing")
     status = await message.answer(personality.thinking("сообщение"))
     await present_intent(status, db, ai, message.text)

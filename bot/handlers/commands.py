@@ -1,34 +1,34 @@
 """
-Команды бота: /start, /help, /notes, /find, /reminders, /del,
-/sovet (PRO), /stats (PRO), /upgrade, /setplan (для теста/админа).
+Команды и кнопки нижней клавиатуры:
+/start /help /menu /today /notes /find /del /reminders /sovet /stats
+/upgrade /setplan
 """
 from __future__ import annotations
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import Message
 
 from ai.base import AIProvider
-from ai.gemini import AIError
-from bot import personality
+from bot import keyboards, personality, views
 from config import settings
 from database.db import Database
-from utils import timeutils
 from utils.tariffs import VALID_TARIFFS, get_tariff
 
 router = Router(name="commands")
 
 
 def _is_admin(user_id: int) -> bool:
-    """Админ — если он в списке ADMIN_IDS, либо список пуст (режим разработки)."""
     return (not settings.admin_ids) or (user_id in settings.admin_ids)
 
 
+# ------------------------------------------------------------------ старт/меню
 @router.message(CommandStart())
 async def cmd_start(message: Message, db: Database) -> None:
-    user = message.from_user
-    await db.get_or_create_user(user.id, user.username, user.first_name)
-    await message.answer(personality.greeting(user.first_name))
+    u = message.from_user
+    await db.get_or_create_user(u.id, u.username, u.first_name)
+    await message.answer(personality.greeting(u.first_name),
+                         reply_markup=keyboards.main_reply())
 
 
 @router.message(Command("help"))
@@ -36,18 +36,27 @@ async def cmd_help(message: Message) -> None:
     await message.answer(personality.help_text())
 
 
-@router.message(Command("upgrade"))
-async def cmd_upgrade(message: Message, db: Database) -> None:
-    user = await db.get_or_create_user(
-        message.from_user.id, message.from_user.username, message.from_user.first_name
-    )
-    await message.answer(personality.upgrade_text(user["tariff"]))
+@router.message(Command("menu"))
+@router.message(F.text == keyboards.BTN_MENU)
+async def cmd_menu(message: Message) -> None:
+    await message.answer(personality.menu_text(),
+                         reply_markup=keyboards.main_menu_inline())
 
 
+# ------------------------------------------------------------------ агенда
+@router.message(Command("today"))
+@router.message(F.text == keyboards.BTN_TODAY)
+async def cmd_today(message: Message, db: Database) -> None:
+    text, kb = await views.today_view(db, message.from_user.id)
+    await message.answer(text, reply_markup=kb)
+
+
+# ------------------------------------------------------------------ заметки
 @router.message(Command("notes"))
+@router.message(F.text == keyboards.BTN_NOTES)
 async def cmd_notes(message: Message, db: Database) -> None:
-    notes = await db.list_notes(message.from_user.id, limit=15)
-    await message.answer(personality.format_notes_list(notes))
+    text, kb = await views.notes_view(db, message.from_user.id)
+    await message.answer(text, reply_markup=kb)
 
 
 @router.message(Command("find"))
@@ -56,59 +65,49 @@ async def cmd_find(message: Message, command: CommandObject, db: Database) -> No
     if not query:
         await message.answer("Что ищем? Напиши: <code>/find квитанция</code>")
         return
-    notes = await db.search_notes(message.from_user.id, query, limit=15)
-    await message.answer(personality.format_search_results(query, notes))
+    notes = await db.search_notes(message.from_user.id, query, limit=20)
+    kb = keyboards.notes_list(notes) if notes else None
+    await message.answer(personality.format_search_results(query, notes), reply_markup=kb)
 
 
 @router.message(Command("del"))
 async def cmd_del(message: Message, command: CommandObject, db: Database) -> None:
     arg = (command.args or "").strip()
     if not arg.isdigit():
-        await message.answer("Укажи номер заметки: <code>/del 12</code>")
+        await message.answer("Удобнее удалять через /notes → открыть заметку → 🗑. "
+                             "Или: <code>/del 12</code>")
         return
     ok = await db.delete_note(int(arg), message.from_user.id)
-    await message.answer("Удалил. 🗑️" if ok else "Не нашёл такую заметку.")
+    await message.answer(personality.note_deleted() if ok else "Не нашёл такую заметку.")
 
 
+# ------------------------------------------------------------------ напоминания
 @router.message(Command("reminders"))
+@router.message(F.text == keyboards.BTN_REMINDERS)
 async def cmd_reminders(message: Message, db: Database) -> None:
-    reminders = await db.list_pending_reminders(message.from_user.id)
-    await message.answer(
-        personality.format_reminders_list(reminders, timeutils.fmt)
-    )
+    text, kb = await views.reminders_view(db, message.from_user.id)
+    await message.answer(text, reply_markup=kb)
 
 
+# ------------------------------------------------------------------ совет (PRO)
 @router.message(Command("sovet"))
+@router.message(F.text == keyboards.BTN_ADVICE)
 async def cmd_sovet(message: Message, db: Database, ai: AIProvider) -> None:
-    user = await db.get_or_create_user(
-        message.from_user.id, message.from_user.username, message.from_user.first_name
-    )
+    u = message.from_user
+    user = await db.get_or_create_user(u.id, u.username, u.first_name)
     if not get_tariff(user["tariff"]).daily_advice:
         await message.answer(personality.upsell("Совет дня"))
         return
-
-    # собираем контекст: последние заметки + ближайшие напоминания
-    notes = await db.list_notes(user["user_id"], limit=10)
-    reminders = await db.list_pending_reminders(user["user_id"])
-    ctx_lines = ["Последние заметки:"]
-    ctx_lines += [f"- {n.get('title') or n.get('text', '')[:50]}" for n in notes] or ["(нет)"]
-    ctx_lines.append("Ближайшие напоминания:")
-    ctx_lines += [f"- {r['text']} ({r['remind_at']})" for r in reminders] or ["(нет)"]
-    context = "\n".join(ctx_lines)
-
-    await message.answer("Думаю над советом… 🤔")
-    try:
-        advice = await ai.daily_advice(context)
-        await message.answer(advice)
-    except AIError:
-        await message.answer("Что-то ИИ задумался. Попробуй ещё разок чуть позже.")
+    status = await message.answer("Думаю над советом… 🤔")
+    advice = await views.sovet_view(db, ai, user)
+    await status.edit_text(advice)
 
 
+# ------------------------------------------------------------------ аналитика (PRO)
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, db: Database) -> None:
-    user = await db.get_or_create_user(
-        message.from_user.id, message.from_user.username, message.from_user.first_name
-    )
+    u = message.from_user
+    user = await db.get_or_create_user(u.id, u.username, u.first_name)
     if not get_tariff(user["tariff"]).analytics:
         await message.answer(personality.upsell("Аналитика продуктивности"))
         return
@@ -122,9 +121,17 @@ async def cmd_stats(message: Message, db: Database) -> None:
     )
 
 
+# ------------------------------------------------------------------ тарифы
+@router.message(Command("upgrade"))
+async def cmd_upgrade(message: Message, db: Database) -> None:
+    u = message.from_user
+    user = await db.get_or_create_user(u.id, u.username, u.first_name)
+    text, _ = views.upgrade_view(user["tariff"])
+    await message.answer(text)
+
+
 @router.message(Command("setplan"))
 async def cmd_setplan(message: Message, command: CommandObject, db: Database) -> None:
-    """Сменить тариф (для теста). Доступно админам или всем, если ADMIN_IDS пуст."""
     if not _is_admin(message.from_user.id):
         await message.answer("Эта команда только для админа.")
         return
@@ -132,8 +139,7 @@ async def cmd_setplan(message: Message, command: CommandObject, db: Database) ->
     if plan not in VALID_TARIFFS:
         await message.answer("Укажи тариф: <code>/setplan free|pro|premium</code>")
         return
-    await db.get_or_create_user(
-        message.from_user.id, message.from_user.username, message.from_user.first_name
-    )
-    await db.set_tariff(message.from_user.id, plan)
+    u = message.from_user
+    await db.get_or_create_user(u.id, u.username, u.first_name)
+    await db.set_tariff(u.id, plan)
     await message.answer(f"Готово. Твой тариф теперь: <b>{get_tariff(plan).title}</b> ✅")

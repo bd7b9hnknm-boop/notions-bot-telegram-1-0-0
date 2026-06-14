@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS reminders (
     context     TEXT,
     remind_at   TEXT NOT NULL,           -- ISO-время (в часовом поясе бота)
     status      TEXT NOT NULL DEFAULT 'pending',  -- pending | done | cancelled
+    repeat      TEXT NOT NULL DEFAULT 'none',      -- none | daily | weekdays | weekly | monthly
     job_id      TEXT,
     created_at  TEXT NOT NULL
 );
@@ -78,7 +79,19 @@ class Database:
         self._conn.row_factory = aiosqlite.Row  # доступ к колонкам по имени
         await self._conn.executescript(SCHEMA)
         await self._conn.commit()
+        await self._migrate()
         logger.info("База данных готова: %s", self.path)
+
+    async def _migrate(self) -> None:
+        """Лёгкие миграции для уже существующих баз (добавляем недостающие колонки)."""
+        cur = await self._conn.execute("PRAGMA table_info(reminders)")
+        cols = {row["name"] for row in await cur.fetchall()}
+        if "repeat" not in cols:
+            await self._conn.execute(
+                "ALTER TABLE reminders ADD COLUMN repeat TEXT NOT NULL DEFAULT 'none'"
+            )
+            await self._conn.commit()
+            logger.info("Миграция: добавлена колонка reminders.repeat")
 
     async def close(self) -> None:
         if self._conn:
@@ -154,6 +167,17 @@ class Database:
         row = await cur.fetchone()
         return row["c"] if row else 0
 
+    async def count_notes_today(self, user_id: int) -> int:
+        start = datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ).isoformat()
+        cur = await self.conn.execute(
+            "SELECT COUNT(*) AS c FROM notes WHERE user_id = ? AND created_at >= ?",
+            (user_id, start),
+        )
+        row = await cur.fetchone()
+        return row["c"] if row else 0
+
     async def list_notes(self, user_id: int, limit: int = 10) -> list[dict[str, Any]]:
         cur = await self.conn.execute(
             "SELECT * FROM notes WHERE user_id = ? ORDER BY id DESC LIMIT ?",
@@ -196,11 +220,12 @@ class Database:
         text: str,
         remind_at: datetime,
         context: str | None = None,
+        repeat: str = "none",
     ) -> int:
         cur = await self.conn.execute(
-            "INSERT INTO reminders (user_id, text, context, remind_at, status, created_at) "
-            "VALUES (?, ?, ?, ?, 'pending', ?)",
-            (user_id, text, context, remind_at.isoformat(),
+            "INSERT INTO reminders (user_id, text, context, remind_at, status, repeat, created_at) "
+            "VALUES (?, ?, ?, ?, 'pending', ?, ?)",
+            (user_id, text, context, remind_at.isoformat(), repeat,
              datetime.now().isoformat()),
         )
         await self.conn.commit()

@@ -23,6 +23,7 @@ async def handle_voice(message: Message, db: Database, ai: AIProvider) -> None:
     await db.get_or_create_user(
         message.from_user.id, message.from_user.username, message.from_user.first_name
     )
+    await message.bot.send_chat_action(message.chat.id, "typing")
     status = await message.answer(personality.thinking("голосовое"))
 
     try:

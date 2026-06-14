@@ -37,6 +37,7 @@ def payload_from_image(data: dict) -> dict:
         "reminder_text": data.get("suggested_reminder") or data.get("title")
         or data.get("summary"),
         "datetime": None,
+        "repeat": "none",
     }
 
 
@@ -53,6 +54,7 @@ def payload_from_text(data: dict) -> dict:
         "deadline": None,
         "reminder_text": data.get("text") or data.get("title"),
         "datetime": data.get("datetime"),
+        "repeat": data.get("repeat") or "none",
     }
 
 
@@ -87,8 +89,9 @@ async def create_reminder(
     text: str,
     when: datetime,
     context: str | None = None,
+    repeat: str = "none",
 ) -> int:
     """Создаём напоминание в БД и ставим задачу в планировщик."""
-    reminder_id = await db.add_reminder(user_id, text, when, context)
-    await scheduler.schedule(reminder_id, when)
+    reminder_id = await db.add_reminder(user_id, text, when, context, repeat)
+    await scheduler.schedule(reminder_id)
     return reminder_id

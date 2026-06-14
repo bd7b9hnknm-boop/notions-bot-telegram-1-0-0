@@ -1,7 +1,6 @@
 """
 Общий разбор «намерения» из текста (и из расшифрованного голоса):
-заметка это или напоминание. Используется и текстовым хендлером,
-и голосовым.
+заметка это или напоминание (в т.ч. повторяющееся).
 """
 from __future__ import annotations
 
@@ -25,25 +24,27 @@ async def present_intent(status: Message, db: Database, ai: AIProvider, raw_text
     except AIError as e:
         logger.warning("Разбор текста не удался: %s", e)
         await status.edit_text(
-            "Хм, не понял. Попробуй сформулировать иначе — "
-            "или пришли как заметку. 🙂"
+            "Хм, не понял 🤔 Попробуй сформулировать иначе — или пришли как заметку."
         )
         return
 
     payload = payload_from_text(data)
+    payload["display"] = personality.format_text_intent(data)
+    payload["saved"] = None
+    payload["reminded"] = None
 
-    # Пытаемся понять время для напоминания
-    direct_time_label = None
+    # время + повтор для кнопки быстрого подтверждения
+    direct_label = None
+    repeat = payload.get("repeat") or "none"
     dt = timeutils.parse_deadline(payload.get("datetime"))
     if payload.get("intent") == "reminder" and dt and dt > timeutils.now():
         payload["datetime"] = dt.isoformat()
-        direct_time_label = timeutils.fmt(dt)
+        direct_label = timeutils.describe_schedule(repeat, dt)
     else:
         payload["datetime"] = None
 
     pid = pending.put(payload)
-    text = personality.format_text_intent(data)
     await status.edit_text(
-        text,
-        reply_markup=keyboards.after_analysis(pid, direct_time_label=direct_time_label),
+        personality.render_card(payload),
+        reply_markup=keyboards.after_analysis(pid, payload, direct_label),
     )

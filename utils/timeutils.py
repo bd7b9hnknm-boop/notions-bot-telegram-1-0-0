@@ -108,3 +108,37 @@ def fmt(dt: datetime) -> str:
     months = ["янв", "фев", "мар", "апр", "мая", "июн",
               "июл", "авг", "сен", "окт", "ноя", "дек"]
     return f"{dt.day} {months[dt.month - 1]} в {dt.strftime('%H:%M')}"
+
+
+# «каждый/каждую/каждое <день>» с правильным родом
+_EVERY_WEEKDAY = ["каждый понедельник", "каждый вторник", "каждую среду",
+                  "каждый четверг", "каждую пятницу", "каждую субботу",
+                  "каждое воскресенье"]
+
+
+def describe_schedule(repeat: str, dt: datetime) -> str:
+    """Человеческое описание расписания напоминания."""
+    t = dt.strftime("%H:%M")
+    if repeat == "daily":
+        return f"каждый день в {t}"
+    if repeat == "weekdays":
+        return f"по будням в {t}"
+    if repeat == "weekly":
+        return f"{_EVERY_WEEKDAY[dt.weekday()]} в {t}"
+    if repeat == "monthly":
+        return f"каждое {dt.day}-е число в {t}"
+    return fmt(dt)  # разовое
+
+
+def is_recurring_today(repeat: str, dt: datetime, ref: datetime | None = None) -> bool:
+    """Срабатывает ли повторяющееся напоминание сегодня (для агенды)."""
+    ref = ref or now()
+    if repeat == "daily":
+        return True
+    if repeat == "weekdays":
+        return ref.weekday() < 5
+    if repeat == "weekly":
+        return ref.weekday() == dt.weekday()
+    if repeat == "monthly":
+        return ref.day == dt.day
+    return False
