@@ -4,6 +4,9 @@ aiogram>=3.13,<4.0          # асинхронный фреймворк для T
 # --- ИИ (Google Gemini) ---
 google-genai>=1.0.0         # официальный SDK Google GenAI (фото + голос)
 
+# --- ИИ (Qwen / Alibaba DashScope, OpenAI-совместимый) ---
+openai>=1.40.0              # используем для вызова Qwen по OpenAI-совместимому API
+
 # --- База данных ---
 aiosqlite>=0.20.0           # асинхронный SQLite
 

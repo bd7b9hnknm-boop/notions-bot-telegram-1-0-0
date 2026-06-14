@@ -13,9 +13,12 @@ def get_provider() -> AIProvider:
     if provider == "gemini":
         from ai.gemini import GeminiProvider
         return GeminiProvider()
+    if provider == "qwen":
+        from ai.qwen import QwenProvider
+        return QwenProvider()
     if provider == "gigachat":
         from ai.gigachat import GigaChatProvider
         return GigaChatProvider()
     raise RuntimeError(
-        f"Неизвестный AI_PROVIDER='{provider}'. Допустимо: gemini | gigachat."
+        f"Неизвестный AI_PROVIDER='{provider}'. Допустимо: gemini | qwen | gigachat."
     )

@@ -52,6 +52,9 @@ class Settings:
     ai_provider: str
     gemini_api_keys: tuple[str, ...]   # пул ключей для ротации
     gemini_model: str
+    qwen_api_keys: tuple[str, ...]     # ключи Qwen (DashScope)
+    qwen_base_url: str
+    qwen_model: str
     gigachat_credentials: str
 
     # Общее
@@ -67,6 +70,8 @@ class Settings:
             missing.append("BOT_TOKEN")
         if self.ai_provider == "gemini" and not self.gemini_api_keys:
             missing.append("GEMINI_API_KEYS (или GEMINI_API_KEY)")
+        if self.ai_provider == "qwen" and not self.qwen_api_keys:
+            missing.append("QWEN_API_KEYS (или QWEN_API_KEY)")
         if self.ai_provider == "gigachat" and not self.gigachat_credentials:
             missing.append("GIGACHAT_CREDENTIALS")
         if missing:
@@ -86,6 +91,13 @@ def load_settings() -> Settings:
             os.getenv("GEMINI_API_KEYS"), os.getenv("GEMINI_API_KEY")
         ),
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip(),
+        qwen_api_keys=_parse_keys(
+            os.getenv("QWEN_API_KEYS"), os.getenv("QWEN_API_KEY")
+        ),
+        qwen_base_url=os.getenv(
+            "QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+        ).strip(),
+        qwen_model=os.getenv("QWEN_MODEL", "qwen-vl-max").strip(),
         gigachat_credentials=os.getenv("GIGACHAT_CREDENTIALS", "").strip(),
         timezone=os.getenv("TIMEZONE", "Europe/Moscow").strip(),
         database_path=os.getenv("DATABASE_PATH", "data/bot.db").strip(),
